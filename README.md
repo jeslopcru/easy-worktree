@@ -4,13 +4,16 @@
 
 ```
 $ wt
-   0    1 changed  main                     ~/code/my-app
-*  1    0 changed  feat/login-page          ~/code/my-app/.claude/worktrees/feat-login-page
-   2    3 changed  fix/flaky-tests          ~/code/my-app/.claude/worktrees/fix-flaky-tests
-   3  folder gone                           ~/code/my-app/.claude/worktrees/old-spike  (stale — wt prune)
+   #  clean  changes      MR/PR        branch            folder            why
+*  0  main     1 changed  -            main              my-app
+   1  safe     0 changed  !42 merged   feat/login-page   feat-login-page
+   2  check    0 changed  !43 closed   fix/flaky-tests   fix-flaky-tests   3 commits not in origin/main, MR closed
+   3  keep     0 changed  !44 opened   feat/dark-mode    feat-dark-mode    MR still open
+   4  keep     2 changed  -            spike/parser      spike-parser      2 uncommitted files
+   5  gone                -            old/spike         old-spike         folder deleted by hand — run wt prune
 ```
 
-🟡 yellow = uncommitted changes · 🟢 green = clean · 🔴 red = folder deleted by hand · **bold `*`** = you are here
+One table, everything you need: 🟢 **safe** to remove · 🟡 **check** first (commits not in the default branch) · 🔴 **keep** (uncommitted files or open MR/PR) · 🟣 **gone** (run `wt prune`) · `*` = you are here
 
 ## 🚀 Install
 
@@ -27,31 +30,22 @@ To update: `git -C ~/.easy-worktree pull`
 
 | Command | What it does |
 |---|---|
-| `wt` | 📋 List worktrees: number, changed files, branch, path |
+| `wt` | 📋 List worktrees with uncommitted changes, MR/PR, and whether each is **safe** to remove (fetches origin first) |
 | `wt new <branch> [base]` | 🏗️ Create a worktree and jump into it. Reuses the branch if it exists, otherwise creates it from `base` (default: current HEAD). Symlinks your `.env` files in |
 | `wt cd <n\|name>` | 🐇 Jump into a worktree by number or any part of its name |
 | `wt rm <n\|name> [-f]` | 🧹 Stop its Docker Compose project, then remove it. Refuses if there are uncommitted changes (unless `-f`). Keeps the branch |
-| `wt status` | 🚦 Fetch, then show each worktree's MR/PR and whether it's **safe** to remove (alias `wt st`) |
 | `wt prune` | 🍂 Forget worktrees whose folder you deleted by hand |
 | `wt help` | 📖 Everything above, in your terminal |
 
 Press **Tab** after `wt` to complete commands, worktree names and branches. ⌨️
 
-## 🚦 What can I clean up?
+## 🚦 How "clean" is decided
 
-```
-$ wt status
-   #  clean  MR/PR        branch                 why
-*  0  main   -            main                   main checkout
-   1  safe   !42 merged   feat/login-page        everything is in origin/main
-   2  check  !43 closed   fix/flaky-tests        3 commits not in origin/main, MR closed
-   3  keep   !44 opened   feat/dark-mode         MR still open
-   4  keep   -            spike/new-parser       2 uncommitted files
-```
+- 🟢 **safe**: nothing uncommitted, and every commit is already in origin's default branch (matched by content, so work that landed through another branch counts). `wt rm` it.
+- 🟡 **check**: some commits aren't in the default branch. Look before removing. A squash-merged MR lands here too, because squashing rewrites the commits.
+- 🔴 **keep**: uncommitted files, or the MR/PR is still open.
 
-- 🟢 **safe**: nothing uncommitted and every commit is already in the default branch, so `wt rm` it
-- 🟡 **check**: has commits that aren't in the default branch, so look before removing (a squash-merged MR lands here too)
-- 🔴 **keep**: uncommitted files, or the MR/PR is still open
+MR/PR comes from `glab` + `jq` (GitLab) or `gh` (GitHub). Without them the column shows `-` and the rest still works.
 
 ## 🔁 A typical day
 
@@ -59,7 +53,7 @@ $ wt status
 wt new feat/login-page origin/main   # 🏗️ new house, fresh from main
 # ...code, commit, push...
 wt cd 0                              # 🏠 back to the main checkout
-wt status                            # 🚦 merged yet?
+wt                                   # 🚦 merged yet? safe to remove?
 wt rm login                          # 🧹 tidy up when it's merged
 git branch -D feat/login-page        # ✂️ trim the branch
 ```

@@ -28,6 +28,7 @@
   --term-yellow: #E8C35A;
   --term-green: #7CCB8E;
   --term-red: #F08080;
+  --term-purple: #C79BF2;
   --display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -101,7 +102,7 @@ svg .leaves { fill: var(--leaf); opacity: 0.18; }
 
 .grownups { border-top: 3px solid var(--bark); margin-top: 56px; }
 .term { background: var(--term-bg); color: var(--term-fg); border-radius: 12px; padding: 16px; overflow-x: auto; font: 13px/1.7 var(--mono); white-space: pre; }
-.term .r { color: var(--term-red); } .term .y { color: var(--term-yellow); } .term .g { color: var(--term-green); } .term b { font-weight: 700; color: #fff; }
+.term .r { color: var(--term-red); } .term .m { color: var(--term-purple); } .term .y { color: var(--term-yellow); } .term .g { color: var(--term-green); } .term b { font-weight: 700; color: #fff; }
 .term .dim { opacity: 0.6; }
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
@@ -306,49 +307,38 @@ pre.src { margin: 0; background: var(--term-bg); color: var(--term-fg); border-r
 <section class="grownups" id="reference">
   <span class="eyebrow">Reference</span>
   <h2>Commands</h2>
-  <p>A small zsh function that wraps <code>git worktree</code>. It shows every worktree of the repo you're in. The one you're in is bold with a <code>*</code>, worktrees with uncommitted changes are yellow, clean ones are green, and red means the folder was deleted by hand. Press <kbd>Tab</kbd> after <code>wt</code> to complete commands, worktree names and branch names.</p>
-  <div class="term" aria-label="Example output of the wt command"><span class="dim">$ wt</span>
-   0  <span class="y">  1 changed  main                </span> ~/code/my-app
-<b>*  1  <span class="g">  0 changed  feat/login-page     </span> ~/code/my-app/.claude/worktrees/feat-login-page</b>
-   2  <span class="y">  3 changed  fix/flaky-tests     </span> ~/code/my-app/.claude/worktrees/fix-flaky-tests
-   3  <span class="r">folder gone                      </span> ~/code/my-app/.claude/worktrees/old-spike  (stale — wt prune)</div>
-  <div class="legend">
-    <span><span class="dot" style="background:var(--term-yellow)"></span>uncommitted changes</span>
-    <span><span class="dot" style="background:var(--term-green)"></span>clean</span>
-    <span><span class="dot" style="background:var(--term-red)"></span>folder deleted by hand</span>
-    <span><strong>bold *</strong> you are here</span>
+  <p>A small zsh function that wraps <code>git worktree</code>. Typing <code>wt</code> fetches origin and shows every worktree of the repo you're in, in one table: uncommitted changes, its MR or PR, and whether it's safe to remove. Press <kbd>Tab</kbd> after <code>wt</code> to complete commands, worktree names and branch names.</p>
+  <div class="term" aria-label="Example output of the wt command"><span class="dim">$ wt
+   #  clean  changes      MR/PR        branch            folder            why</span>
+<b>*</b>  0  <span class="dim">main </span>  <span class="y">  1 changed</span>  -            <b>main</b>              <span class="dim">my-app</span>
+   1  <span class="g">safe </span>  <span class="g">  0 changed</span>  !42 merged   <b>feat/login-page</b>   <span class="dim">feat-login-page</span>
+   2  <span class="y">check</span>  <span class="g">  0 changed</span>  !43 closed   <b>fix/flaky-tests</b>   <span class="dim">fix-flaky-tests</span>   <span class="y">3 commits not in origin/main, MR closed</span>
+   3  <span class="r">keep </span>  <span class="g">  0 changed</span>  !44 opened   <b>feat/dark-mode</b>    <span class="dim">feat-dark-mode</span>    <span class="r">MR still open</span>
+   4  <span class="r">keep </span>  <span class="y">  2 changed</span>  -            <b>spike/parser</b>      <span class="dim">spike-parser</span>      <span class="r">2 uncommitted files</span>
+   5  <span class="m">gone </span>               -            <b>old/spike</b>         <span class="dim">old-spike</span>         <span class="m">folder deleted by hand — run wt prune</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>*</code> / <code>#</code></td><td>The worktree you're in, and the number to use with <code>wt cd</code> and <code>wt rm</code>. 0 is always the main checkout.</td></tr>
+        <tr><td><code>clean</code></td><td><strong>safe</strong>: no uncommitted files, and every commit is already in origin's default branch (matched by content). <strong>check</strong>: some commits aren't there yet, so look first; a squash-merged MR lands here too. <strong>keep</strong>: uncommitted files, or the MR/PR is still open. <strong>gone</strong>: the folder was deleted by hand, so run <code>wt prune</code>.</td></tr>
+        <tr><td><code>changes</code></td><td>Uncommitted files: yellow if any, green if clean.</td></tr>
+        <tr><td><code>MR/PR</code></td><td>From <code>glab</code> + <code>jq</code> (GitLab) or <code>gh</code> (GitHub). Shows <code>-</code> if there is none or the tool isn't installed.</td></tr>
+        <tr><td><code>why</code></td><td>The reason, whenever the verdict isn't safe.</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <div class="table-wrap">
     <table>
       <thead><tr><th>Command</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td><code>wt</code></td><td>List worktrees with their number, changed-file count, branch and path.</td></tr>
+        <tr><td><code>wt</code></td><td>Fetch origin, then list worktrees with their number, verdict, uncommitted changes, MR/PR, branch and folder.</td></tr>
         <tr><td><code>wt new &lt;branch&gt; [base]</code></td><td>Create a worktree in <code>$WT_DIR</code> and move into it. Checks out the branch if it already exists, or creates it from <code>base</code> (default: current HEAD). Symlinks the main checkout's <code>.env</code> files.</td></tr>
         <tr><td><code>wt cd &lt;n|name&gt;</code></td><td>Move your terminal into a worktree. Use the number from the list, or any part of the path.</td></tr>
         <tr><td><code>wt rm &lt;n|name&gt; [-f]</code></td><td>Stop the worktree's Docker Compose project (<code>down -v</code>), then remove it. Refuses if there are uncommitted changes unless you pass <code>-f</code>. Never removes the main checkout. Keeps the branch.</td></tr>
-        <tr><td><code>wt status</code></td><td>Fetch, then show each worktree's MR (GitLab, via <code>glab</code> + <code>jq</code>) or PR (GitHub, via <code>gh</code>) and a verdict: <strong>safe</strong> to remove, <strong>check</strong> first, or <strong>keep</strong>. Alias <code>wt st</code>.</td></tr>
         <tr><td><code>wt prune</code></td><td>Forget worktrees whose folder was deleted by hand (shown in red as <em>folder gone</em> in the list). Stops their Docker Compose first. Never touches folders that exist, branches or commits.</td></tr>
         <tr><td><code>wt help</code></td><td>Usage, how to read the list, and examples.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <h3>What can I clean up?</h3>
-  <div class="term" aria-label="Example output of wt status"><span class="dim">$ wt status
-   #  clean  MR/PR        branch                 why</span>
-<b>*  0  <span class="dim">main </span>  -            main                   main checkout</b>
-   1  <span class="g">safe </span>  !42 merged   feat/login-page        everything is in origin/main
-   2  <span class="y">check</span>  !43 closed   fix/flaky-tests        3 commits not in origin/main, MR closed
-   3  <span class="r">keep </span>  !44 opened   feat/dark-mode         MR still open
-   4  <span class="r">keep </span>  -            spike/new-parser       2 uncommitted files</div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Verdict</th><th>Meaning</th></tr></thead>
-      <tbody>
-        <tr><td><code>safe</code></td><td>No uncommitted files, and every commit is already in the default branch (<code>origin/HEAD</code>, else <code>origin/main</code> or <code>origin/master</code>). Remove it with <code>wt rm</code>.</td></tr>
-        <tr><td><code>check</code></td><td>Has commits that are not in the default branch. Look before removing. A squash-merged MR also lands here, because squashing rewrites the commits.</td></tr>
-        <tr><td><code>keep</code></td><td>Has uncommitted files, or its MR/PR is still open.</td></tr>
       </tbody>
     </table>
   </div>
@@ -428,7 +418,8 @@ _wt_help() {
 wt — see, switch and remove git worktrees
 
 USAGE
-  wt                   list all worktrees of this repo
+  wt                   list all worktrees: changes, MR/PR, and whether each one
+                       is safe to remove (fetches origin first)
   wt new <branch> [base]
                        create a worktree and jump into it
                        (existing branch → checks it out; new branch → created from
@@ -446,11 +437,17 @@ USAGE
           press TAB to complete commands, worktree names and branches
 
 READING THE LIST
-  *  bold line     the worktree you are in right now
-  yellow           has uncommitted changes (the number = changed files)
-  green            clean
-  red "folder gone" the folder was deleted by hand — run 'wt prune'
-  0                always the main checkout (cannot be removed)
+  *        the worktree you are in right now
+  #        number to use with wt cd / wt rm (0 = main checkout, never removed)
+  clean    safe   no uncommitted files, every commit already in origin's
+                  default branch → wt rm it
+           check  has commits not in the default branch: look before removing
+                  (a squash-merged MR also lands here)
+           keep   uncommitted files, or its MR/PR is still open
+           gone   folder was deleted by hand → wt prune
+  changes  uncommitted files (yellow) or clean (green)
+  MR/PR    read with glab + jq (GitLab) or gh (GitHub); '-' if none or not installed
+  why      the reason, when it is not safe
 
 REMOVING
   - refuses if the worktree has uncommitted changes; add -f to discard them
@@ -459,30 +456,13 @@ REMOVING
   - the branch is kept; delete it yourself with: git branch -D <branch>
 
 EXAMPLES
-  wt                   what do I have?
+  wt                   what do I have, and what can I clean up?
   wt new feat/login-page origin/main
                        start a new task from the latest main
   wt cd 3              work in worktree 3
   wt cd 0              back to the main checkout
   wt rm login          clean up a finished worktree
 EOF
-}
-
-_wt_list() {
-  local i=0 d n mark bold color current reset=$'\e[0m'
-  current=$(git rev-parse --show-toplevel)
-  _wt_paths | while read -r d; do
-    [[ ${d:A} == ${current:A} ]] && { mark='*'; bold=$'\e[1m'; } || { mark=' '; bold=''; }
-    if [[ ! -d $d ]]; then
-      printf '%s %2d  \e[31m%-62s%s %s  (stale — wt prune)\n' "$mark" $i "folder gone" "$reset" "${d/#$HOME/~}"
-      (( i++ )); continue
-    fi
-    n=$(git -C "$d" status -s 2>/dev/null | wc -l | tr -d ' ')
-    (( n > 0 )) && color=$'\e[33m' || color=$'\e[32m'
-    printf '%s%s %2d  %s%3s changed  %-50s%s%s %s%s\n' "$bold" "$mark" $i "$color" $n \
-      "$(git -C "$d" branch --show-current 2>/dev/null)" "$reset" "$bold" "${d/#$HOME/~}" "$reset"
-    (( i++ ))
-  done
 }
 
 _wt_new() {
@@ -509,6 +489,85 @@ _wt_prune() {
     docker compose -p "${${d:t}:l}" down -v 2>/dev/null
   done
   git worktree prune && echo "done — branches kept"
+}
+
+_wt_base() {
+  git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null && return
+  local b
+  for b in origin/main origin/master; do
+    git rev-parse -q --verify "$b" >/dev/null && { print -- $b; return; }
+  done
+  return 1
+}
+
+_wt_mr() {
+  if [[ $(git remote get-url origin 2>/dev/null) == *github.com* ]]; then
+    (( $+commands[gh] )) || return
+    gh pr list --head "$1" --state all --limit 1 --json number,state \
+      --jq '.[0] | select(.) | "#\(.number) \(.state | ascii_downcase)"' 2>/dev/null
+  else
+    (( $+commands[glab] && $+commands[jq] )) || return
+    glab mr list --source-branch "$1" --all -F json 2>/dev/null | jq -r '.[0] | select(.) | "!\(.iid) \(.state)"'
+  fi
+}
+
+_wt_verdict() {
+  local dirty=$1 unique=$2 mr=$3 base=$4
+  (( dirty > 0 ))           && { print "keep|$dirty uncommitted files"; return; }
+  [[ $mr == *\ opened || $mr == *\ open ]] && { print "keep|MR still open"; return; }
+  (( unique == 0 ))         && { print "safe|everything is in $base"; return; }
+  [[ $mr == *\ merged ]]    && { print "check|MR merged, but $unique commits differ from $base (squash?)"; return; }
+  print "check|$unique commits not in $base${mr:+, MR ${mr#* }}"
+}
+
+_wt_rows() {
+  git worktree list --porcelain | awk '
+    /^worktree /{ if (p) print p "\t" b; p = substr($0, 10); b = "" }
+    /^branch /  { b = substr($0, 19) }
+    END         { if (p) print p "\t" b }'
+}
+
+_wt_lookups() {
+  local b
+  ( git fetch -q origin 2>/dev/null ) &
+  for b in "$@"; do ( print -r -- "$b"$'\t'"$(_wt_mr "$b")" ) & done
+  wait
+}
+
+_wt_list() {
+  local -a rows branches; rows=(${(f)"$(_wt_rows)"})
+  local -A mrs colors=(safe $'\e[32m' check $'\e[33m' keep $'\e[31m' main $'\e[2m' gone $'\e[35m')
+  local line d b base main current i=0 n unique v reason mark wb=6 wf=6 reset=$'\e[0m' dim=$'\e[2m'
+  for line in $rows; do
+    b=${line#*$'\t'}; d=${line%%$'\t'*}
+    [[ -n $b ]] && branches+=$b
+    (( ${#b} > wb )) && wb=${#b}; (( ${#d:t} > wf )) && wf=${#d:t}
+  done
+  for line in ${(f)"$(_wt_lookups $branches)"}; do mrs[${line%%$'\t'*}]=${line#*$'\t'}; done
+  main=${rows[1]%%$'\t'*}
+  base=$(_wt_base) || base=$(git -C "$main" branch --show-current)
+  current=$(git rev-parse --show-toplevel)
+  printf "$dim  %2s  %-5s  %-11s  %-11s  %-${wb}s  %-${wf}s  %s$reset\n" '#' 'clean' 'changes' 'MR/PR' 'branch' 'folder' 'why'
+  for line in $rows; do
+    d=${line%%$'\t'*}; b=${line#*$'\t'}
+    mark=' '; [[ ${d:A} == ${current:A} ]] && mark='*'
+    if [[ ! -d $d ]]; then
+      v=gone; n=; reason="folder deleted by hand — run wt prune"
+    else
+      n=$(git -C "$d" status -s 2>/dev/null | wc -l | tr -d ' ')
+      if [[ $d == $main ]]; then
+        v=main; reason=
+      else
+        unique=$(git cherry "$base" "${b:-$(git -C "$d" rev-parse HEAD)}" 2>/dev/null | command grep -c '^+')
+        IFS='|' read -r v reason <<< "$(_wt_verdict $n $unique "${mrs[$b]}" $base)"
+      fi
+    fi
+    [[ $v == safe ]] && reason=
+    printf "\e[1m%s$reset %2d  %s%-5s$reset  %s%11s$reset  %-11s  \e[1m%-${wb}s$reset  $dim%-${wf}s$reset  %s%s$reset\n" \
+      "$mark" $i "${colors[$v]}" $v "$( [[ $n == 0 ]] && print $'\e[32m' || print $'\e[33m' )" "${n/#%-/}${n:+ changed}" \
+      "${mrs[$b]:--}" "${b:-(detached)}" "${d:t}" "${colors[$v]}" "$reason"
+    (( i++ ))
+  done
 }
 
 _wt_rm() {
@@ -542,7 +601,7 @@ wt() {
 _wt_complete() {
   local -a cmds names
   cmds=(
-    'ls:list all worktrees'
+    'ls:list worktrees with MR status and what is safe to remove'
     'new:create a worktree and jump into it'
     'cd:jump into a worktree'
     'rm:remove a worktree'

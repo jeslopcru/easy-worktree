@@ -18,7 +18,8 @@ _wt_help() {
 wt — see, switch and remove git worktrees
 
 USAGE
-  wt                   list all worktrees of this repo
+  wt                   list all worktrees: changes, MR/PR, and whether each one
+                       is safe to remove (fetches origin first)
   wt new <branch> [base]
                        create a worktree and jump into it
                        (existing branch → checks it out; new branch → created from
@@ -26,8 +27,6 @@ USAGE
                        lives in $WT_DIR (default: .claude/worktrees)
   wt cd <n|name>       jump the terminal into a worktree
   wt rm <n|name> [-f]  remove a worktree (stops its docker compose first)
-  wt status            fetch, then show each worktree's MR/PR and whether it is
-                       safe to remove (alias: wt st)
   wt prune             forget worktrees whose folder was deleted by hand
                        (stops their docker compose; never touches existing
                        folders, branches or commits)
@@ -38,19 +37,17 @@ USAGE
           press TAB to complete commands, worktree names and branches
 
 READING THE LIST
-  *  bold line     the worktree you are in right now
-  yellow           has uncommitted changes (the number = changed files)
-  green            clean
-  red "folder gone" the folder was deleted by hand — run 'wt prune'
-  0                always the main checkout (cannot be removed)
-
-STATUS VERDICTS
-  safe   no uncommitted files and every commit is already in origin's
-         default branch → wt rm it
-  check  has commits that are not in the default branch: look before removing
-         (a squash-merged MR also lands here)
-  keep   uncommitted files, or its MR/PR is still open
-  MR/PR  read with glab + jq (GitLab) or gh (GitHub); shown as '-' if missing
+  *        the worktree you are in right now
+  #        number to use with wt cd / wt rm (0 = main checkout, never removed)
+  clean    safe   no uncommitted files, every commit already in origin's
+                  default branch → wt rm it
+           check  has commits not in the default branch: look before removing
+                  (a squash-merged MR also lands here)
+           keep   uncommitted files, or its MR/PR is still open
+           gone   folder was deleted by hand → wt prune
+  changes  uncommitted files (yellow) or clean (green)
+  MR/PR    read with glab + jq (GitLab) or gh (GitHub); '-' if none or not installed
+  why      the reason, when it is not safe
 
 REMOVING
   - refuses if the worktree has uncommitted changes; add -f to discard them
@@ -59,31 +56,13 @@ REMOVING
   - the branch is kept; delete it yourself with: git branch -D <branch>
 
 EXAMPLES
-  wt                   what do I have?
+  wt                   what do I have, and what can I clean up?
   wt new feat/login-page origin/main
                        start a new task from the latest main
-  wt status            what can I clean up?
   wt cd 3              work in worktree 3
   wt cd 0              back to the main checkout
   wt rm login          clean up a finished worktree
 EOF
-}
-
-_wt_list() {
-  local i=0 d n mark bold color current reset=$'\e[0m'
-  current=$(git rev-parse --show-toplevel)
-  _wt_paths | while read -r d; do
-    [[ ${d:A} == ${current:A} ]] && { mark='*'; bold=$'\e[1m'; } || { mark=' '; bold=''; }
-    if [[ ! -d $d ]]; then
-      printf '%s %2d  \e[31m%-62s%s %s  (stale — wt prune)\n' "$mark" $i "folder gone" "$reset" "${d/#$HOME/~}"
-      (( i++ )); continue
-    fi
-    n=$(git -C "$d" status -s 2>/dev/null | wc -l | tr -d ' ')
-    (( n > 0 )) && color=$'\e[33m' || color=$'\e[32m'
-    printf '%s%s %2d  %s%3s changed  %-50s%s%s %s%s\n' "$bold" "$mark" $i "$color" $n \
-      "$(git -C "$d" branch --show-current 2>/dev/null)" "$reset" "$bold" "${d/#$HOME/~}" "$reset"
-    (( i++ ))
-  done
 }
 
 _wt_new() {
@@ -141,26 +120,52 @@ _wt_verdict() {
   print "check|$unique commits not in $base${mr:+, MR ${mr#* }}"
 }
 
-_wt_status() {
-  local base main current d b i=0 dirty unique mr v reason mark
-  local -A colors=(safe $'\e[32m' check $'\e[33m' keep $'\e[31m' main $'\e[2m' gone $'\e[35m')
-  echo "fetching…"; git fetch -q origin 2>/dev/null
-  base=$(_wt_base) || { echo "no origin/main or origin/master to compare with" >&2; return 1; }
-  main=$(_wt_paths | head -1)
+_wt_rows() {
+  git worktree list --porcelain | awk '
+    /^worktree /{ if (p) print p "\t" b; p = substr($0, 10); b = "" }
+    /^branch /  { b = substr($0, 19) }
+    END         { if (p) print p "\t" b }'
+}
+
+_wt_lookups() {
+  local b
+  ( git fetch -q origin 2>/dev/null ) &
+  for b in "$@"; do ( print -r -- "$b"$'\t'"$(_wt_mr "$b")" ) & done
+  wait
+}
+
+_wt_list() {
+  local -a rows branches; rows=(${(f)"$(_wt_rows)"})
+  local -A mrs colors=(safe $'\e[32m' check $'\e[33m' keep $'\e[31m' main $'\e[2m' gone $'\e[35m')
+  local line d b base main current i=0 n unique v reason mark wb=6 wf=6 reset=$'\e[0m' dim=$'\e[2m'
+  for line in $rows; do
+    b=${line#*$'\t'}; d=${line%%$'\t'*}
+    [[ -n $b ]] && branches+=$b
+    (( ${#b} > wb )) && wb=${#b}; (( ${#d:t} > wf )) && wf=${#d:t}
+  done
+  for line in ${(f)"$(_wt_lookups $branches)"}; do mrs[${line%%$'\t'*}]=${line#*$'\t'}; done
+  main=${rows[1]%%$'\t'*}
+  base=$(_wt_base) || base=$(git -C "$main" branch --show-current)
   current=$(git rev-parse --show-toplevel)
-  printf '\e[2m%s %2s  %-5s  %-12s %-50s %s\e[0m\n' ' ' '#' 'clean' 'MR/PR' 'branch' 'why'
-  for d in ${(f)"$(_wt_paths)"}; do
+  printf "$dim  %2s  %-5s  %-11s  %-11s  %-${wb}s  %-${wf}s  %s$reset\n" '#' 'clean' 'changes' 'MR/PR' 'branch' 'folder' 'why'
+  for line in $rows; do
+    d=${line%%$'\t'*}; b=${line#*$'\t'}
     mark=' '; [[ ${d:A} == ${current:A} ]] && mark='*'
-    if [[ $d == $main ]]; then v=main; reason="main checkout"; b=$(git -C "$d" branch --show-current); mr=
-    elif [[ ! -d $d ]]; then v=gone; reason="folder deleted — wt prune"; b='?'; mr=
+    if [[ ! -d $d ]]; then
+      v=gone; n=; reason="folder deleted by hand — run wt prune"
     else
-      b=$(git -C "$d" branch --show-current)
-      dirty=$(git -C "$d" status -s | wc -l | tr -d ' ')
-      unique=$(git cherry "$base" "${b:-$(git -C "$d" rev-parse HEAD)}" | command grep -c '^+')
-      mr=$([[ -n $b ]] && _wt_mr "$b")
-      IFS='|' read -r v reason <<< "$(_wt_verdict $dirty $unique "$mr" $base)"
+      n=$(git -C "$d" status -s 2>/dev/null | wc -l | tr -d ' ')
+      if [[ $d == $main ]]; then
+        v=main; reason=
+      else
+        unique=$(git cherry "$base" "${b:-$(git -C "$d" rev-parse HEAD)}" 2>/dev/null | command grep -c '^+')
+        IFS='|' read -r v reason <<< "$(_wt_verdict $n $unique "${mrs[$b]}" $base)"
+      fi
     fi
-    printf '%s %2d  %s%-5s\e[0m  %-12s %-50s %s\n' "$mark" $i "${colors[$v]}" $v "${mr:--}" "$b" "$reason"
+    [[ $v == safe ]] && reason=
+    printf "\e[1m%s$reset %2d  %s%-5s$reset  %s%11s$reset  %-11s  \e[1m%-${wb}s$reset  $dim%-${wf}s$reset  %s%s$reset\n" \
+      "$mark" $i "${colors[$v]}" $v "$( [[ $n == 0 ]] && print $'\e[32m' || print $'\e[33m' )" "${n/#%-/}${n:+ changed}" \
+      "${mrs[$b]:--}" "${b:-(detached)}" "${d:t}" "${colors[$v]}" "$reason"
     (( i++ ))
   done
 }
@@ -187,7 +192,6 @@ wt() {
     new)   [[ -n $2 ]] || { echo "which branch? wt new <branch> [base]" >&2; return 1; }
            _wt_new "$2" "$3" ;;
     prune) _wt_prune ;;
-    status|st) _wt_status ;;
     rm)    [[ -n $2 ]] || { echo "which one? wt rm <n|name> [-f]" >&2; return 1; }
            _wt_rm "$2" "$3" ;;
     *)     echo "unknown command '$1'" >&2; _wt_help >&2; return 1 ;;
@@ -197,12 +201,11 @@ wt() {
 _wt_complete() {
   local -a cmds names
   cmds=(
-    'ls:list all worktrees'
+    'ls:list worktrees with MR status and what is safe to remove'
     'new:create a worktree and jump into it'
     'cd:jump into a worktree'
     'rm:remove a worktree'
     'prune:forget worktrees whose folder was deleted'
-    'status:show MR status and which worktrees are safe to remove'
     'help:show help'
   )
   if (( CURRENT == 2 )); then
