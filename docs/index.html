@@ -144,7 +144,7 @@ pre.src { margin: 0; background: var(--term-bg); color: var(--term-fg); border-r
 
 <section id="install">
   <h2>Install</h2>
-  <p>Needs <strong>zsh</strong> and <strong>git</strong>. Docker is optional. Run these two lines, then open a new terminal and type <code>wt</code>.</p>
+  <p>Needs <strong>zsh</strong> and <strong>git</strong>. Docker is optional. For MR/PR status you also need <code>glab</code> and <code>jq</code> (GitLab) or <code>gh</code> (GitHub). Run these two lines, then open a new terminal and type <code>wt</code>.</p>
   <div class="install">
     <div class="cmd"><code>git clone https://github.com/jeslopcru/easy-worktree.git ~/.easy-worktree</code><button type="button" data-copy>Copy</button></div>
     <div class="cmd"><code>echo '[ -f ~/.easy-worktree/wt.zsh ] &amp;&amp; source ~/.easy-worktree/wt.zsh' &gt;&gt; ~/.zshrc</code><button type="button" data-copy>Copy</button></div>
@@ -327,8 +327,28 @@ pre.src { margin: 0; background: var(--term-bg); color: var(--term-fg); border-r
         <tr><td><code>wt new &lt;branch&gt; [base]</code></td><td>Create a worktree in <code>$WT_DIR</code> and move into it. Checks out the branch if it already exists, or creates it from <code>base</code> (default: current HEAD). Symlinks the main checkout's <code>.env</code> files.</td></tr>
         <tr><td><code>wt cd &lt;n|name&gt;</code></td><td>Move your terminal into a worktree. Use the number from the list, or any part of the path.</td></tr>
         <tr><td><code>wt rm &lt;n|name&gt; [-f]</code></td><td>Stop the worktree's Docker Compose project (<code>down -v</code>), then remove it. Refuses if there are uncommitted changes unless you pass <code>-f</code>. Never removes the main checkout. Keeps the branch.</td></tr>
+        <tr><td><code>wt status</code></td><td>Fetch, then show each worktree's MR (GitLab, via <code>glab</code> + <code>jq</code>) or PR (GitHub, via <code>gh</code>) and a verdict: <strong>safe</strong> to remove, <strong>check</strong> first, or <strong>keep</strong>. Alias <code>wt st</code>.</td></tr>
         <tr><td><code>wt prune</code></td><td>Forget worktrees whose folder was deleted by hand (shown in red as <em>folder gone</em> in the list). Stops their Docker Compose first. Never touches folders that exist, branches or commits.</td></tr>
         <tr><td><code>wt help</code></td><td>Usage, how to read the list, and examples.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>What can I clean up?</h3>
+  <div class="term" aria-label="Example output of wt status"><span class="dim">$ wt status
+   #  clean  MR/PR        branch                 why</span>
+<b>*  0  <span class="dim">main </span>  -            main                   main checkout</b>
+   1  <span class="g">safe </span>  !42 merged   feat/login-page        everything is in origin/main
+   2  <span class="y">check</span>  !43 closed   fix/flaky-tests        3 commits not in origin/main, MR closed
+   3  <span class="r">keep </span>  !44 opened   feat/dark-mode         MR still open
+   4  <span class="r">keep </span>  -            spike/new-parser       2 uncommitted files</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Verdict</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>safe</code></td><td>No uncommitted files, and every commit is already in the default branch (<code>origin/HEAD</code>, else <code>origin/main</code> or <code>origin/master</code>). Remove it with <code>wt rm</code>.</td></tr>
+        <tr><td><code>check</code></td><td>Has commits that are not in the default branch. Look before removing. A squash-merged MR also lands here, because squashing rewrites the commits.</td></tr>
+        <tr><td><code>keep</code></td><td>Has uncommitted files, or its MR/PR is still open.</td></tr>
       </tbody>
     </table>
   </div>

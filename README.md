@@ -19,7 +19,7 @@ git clone https://github.com/jeslopcru/easy-worktree.git ~/.easy-worktree
 echo '[ -f ~/.easy-worktree/wt.zsh ] && source ~/.easy-worktree/wt.zsh' >> ~/.zshrc
 ```
 
-Open a new terminal and type `wt`. Needs **zsh** and **git**. Docker is optional.
+Open a new terminal and type `wt`. Needs **zsh** and **git**. Docker is optional. For MR/PR status: `glab` + `jq` (GitLab) or `gh` (GitHub).
 
 To update: `git -C ~/.easy-worktree pull`
 
@@ -31,10 +31,27 @@ To update: `git -C ~/.easy-worktree pull`
 | `wt new <branch> [base]` | 🏗️ Create a worktree and jump into it. Reuses the branch if it exists, otherwise creates it from `base` (default: current HEAD). Symlinks your `.env` files in |
 | `wt cd <n\|name>` | 🐇 Jump into a worktree by number or any part of its name |
 | `wt rm <n\|name> [-f]` | 🧹 Stop its Docker Compose project, then remove it. Refuses if there are uncommitted changes (unless `-f`). Keeps the branch |
+| `wt status` | 🚦 Fetch, then show each worktree's MR/PR and whether it's **safe** to remove (alias `wt st`) |
 | `wt prune` | 🍂 Forget worktrees whose folder you deleted by hand |
 | `wt help` | 📖 Everything above, in your terminal |
 
 Press **Tab** after `wt` to complete commands, worktree names and branches. ⌨️
+
+## 🚦 What can I clean up?
+
+```
+$ wt status
+   #  clean  MR/PR        branch                 why
+*  0  main   -            main                   main checkout
+   1  safe   !42 merged   feat/login-page        everything is in origin/main
+   2  check  !43 closed   fix/flaky-tests        3 commits not in origin/main, MR closed
+   3  keep   !44 opened   feat/dark-mode         MR still open
+   4  keep   -            spike/new-parser       2 uncommitted files
+```
+
+- 🟢 **safe**: nothing uncommitted and every commit is already in the default branch, so `wt rm` it
+- 🟡 **check**: has commits that aren't in the default branch, so look before removing (a squash-merged MR lands here too)
+- 🔴 **keep**: uncommitted files, or the MR/PR is still open
 
 ## 🔁 A typical day
 
@@ -42,6 +59,7 @@ Press **Tab** after `wt` to complete commands, worktree names and branches. ⌨�
 wt new feat/login-page origin/main   # 🏗️ new house, fresh from main
 # ...code, commit, push...
 wt cd 0                              # 🏠 back to the main checkout
+wt status                            # 🚦 merged yet?
 wt rm login                          # 🧹 tidy up when it's merged
 git branch -D feat/login-page        # ✂️ trim the branch
 ```
