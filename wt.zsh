@@ -26,11 +26,10 @@ USAGE
                        [base], default: current HEAD; .env files are symlinked in)
                        lives in $WT_DIR (default: .claude/worktrees)
   wt cd <n|name>       jump the terminal into a worktree
-  wt rm <n|name> [-f] [-b|-B]
+  wt rm <n|name> [-f] [-b]
                        remove a worktree (stops its docker compose first)
                        -f  also discard uncommitted changes
-                       -b  also delete its branch, only if it is merged
-                       -B  also delete its branch, even if it is not merged
+                       -b  also delete its branch (prints how to undo)
   wt prune             forget worktrees whose folder was deleted by hand
                        (stops their docker compose; never touches existing
                        folders, branches or commits)
@@ -61,7 +60,7 @@ REMOVING
   - refuses if the worktree has uncommitted changes; add -f to discard them
   - runs 'docker compose -p <folder> down -v' first, so its containers and
     volumes don't keep ports busy
-  - the branch is kept unless you pass -b (merged only) or -B (always)
+  - the branch is kept unless you pass -b
   - remote branches on GitLab/GitHub are never touched
 
 EXAMPLES
@@ -71,7 +70,7 @@ EXAMPLES
   wt cd 3              work in worktree 3
   wt cd 0              back to the main checkout
   wt rm login          clean up a finished worktree
-  wt rm login -b       ...and delete its branch if it is merged
+  wt rm login -b       ...and delete its branch
 EOF
 }
 
@@ -196,9 +195,8 @@ _wt_rm() {
   for opt in "$@"; do
     case $opt in
       -f) force=(--force) ;;
-      -b) del=${del:-safe} ;;
-      -B) del=force ;;
-      -*) echo "unknown option '$opt' — use -f, -b or -B" >&2; return 1 ;;
+      -b) del=1 ;;
+      -*) echo "unknown option '$opt' — use -f or -b" >&2; return 1 ;;
       *)  name=$opt ;;
     esac
   done
@@ -211,19 +209,14 @@ _wt_rm() {
   echo "removed $target"
   if [[ -z $del || -z $branch ]]; then
     echo "branch ${branch:-?} kept (add -b to delete it too)"
-  elif [[ $del == force ]]; then
-    sha=$(git rev-parse --short "$branch")
-    git branch -D "$branch" >/dev/null && echo "deleted branch $branch (was $sha)"
-  else
-    base=$(_wt_base) || base=$(git -C "$(_wt_paths | head -1)" branch --show-current)
-    unique=$(git cherry "$base" "$branch" 2>/dev/null | command grep -c '^+')
-    if (( unique == 0 )); then
-      echo "deleted branch $branch (was $(git rev-parse --short "$branch")), everything is in $base"
-      git branch -D "$branch" >/dev/null
-    else
-      echo "branch $branch kept: $unique commits not in $base (use -B to delete anyway)" >&2
-    fi
+    return
   fi
+  base=$(_wt_base) || base=$(git -C "$(_wt_paths | head -1)" branch --show-current)
+  unique=$(git cherry "$base" "$branch" 2>/dev/null | command grep -c '^+')
+  sha=$(git rev-parse --short "$branch")
+  git branch -D "$branch" >/dev/null || return 1
+  echo "deleted branch $branch (was $sha)"
+  (( unique == 0 )) || echo "⚠ it had $unique commits not in $base — undo with: git branch $branch $sha" >&2
 }
 
 wt() {
@@ -238,7 +231,7 @@ wt() {
     new)   [[ -n $2 ]] || { echo "which branch? wt new <branch> [base]" >&2; return 1; }
            _wt_new "$2" "$3" ;;
     prune) _wt_prune ;;
-    rm)    [[ -n $2 ]] || { echo "which one? wt rm <n|name> [-f] [-b|-B]" >&2; return 1; }
+    rm)    [[ -n $2 ]] || { echo "which one? wt rm <n|name> [-f] [-b]" >&2; return 1; }
            shift; _wt_rm "$@" ;;
     *)     echo "unknown command '$1'" >&2; _wt_help >&2; return 1 ;;
   esac
@@ -265,7 +258,7 @@ _wt_complete() {
   done
   case $words[2] in
     cd|rm) (( CURRENT == 3 )) && _describe 'worktree' names
-           [[ $words[2] == rm && CURRENT -ge 4 ]] && compadd -- -f -b -B ;;
+           [[ $words[2] == rm && CURRENT -ge 4 ]] && compadd -- -f -b ;;
     new)   (( CURRENT == 3 )) && compadd -- ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"}
            (( CURRENT == 4 )) && compadd -- ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null)"} ;;
   esac

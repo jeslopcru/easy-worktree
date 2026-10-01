@@ -35,7 +35,7 @@ To update: `git -C ~/.easy-worktree pull`
 | `wt` | 📋 List worktrees with uncommitted changes, MR/PR, and whether each is **safe** to remove (fetches origin first) |
 | `wt new <branch> [base]` | 🏗️ Create a worktree and jump into it. Reuses the branch if it exists, otherwise creates it from `base` (default: current HEAD). Symlinks your `.env` files in |
 | `wt cd <n\|name>` | 🐇 Jump into a worktree by number or any part of its name |
-| `wt rm <n\|name> [-f] [-b\|-B]` | 🧹 Stop its Docker Compose project, then remove it. Refuses if there are uncommitted changes (unless `-f`). Keeps the branch, unless you add `-b` (delete it if merged) or `-B` (delete it anyway) |
+| `wt rm <n\|name> [-f] [-b]` | 🧹 Stop its Docker Compose project, then remove it. Refuses if there are uncommitted changes (unless `-f`). Add `-b` to delete the branch too (it prints how to undo) |
 | `wt prune` | 🍂 Forget worktrees whose folder you deleted by hand |
 | `wt help` | 📖 Everything above, in your terminal |
 
@@ -65,7 +65,7 @@ wt new feat/login-page origin/main   # 🏗️ new house, fresh from main
 # ...code, commit, push...
 wt cd 0                              # 🏠 back to the main checkout
 wt                                   # 🚦 merged yet? safe to remove?
-wt rm login -b                       # 🧹 tidy up + delete the branch, if it's merged
+wt rm login -b                       # 🧹 tidy up + delete the branch
 ```
 
 ## ⚙️ Config
