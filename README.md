@@ -62,7 +62,7 @@ Things to know:
 - 🐳 Docker Compose names projects after the folder, so each worktree gets its own containers. `wt rm` and `wt prune` stop them so ports don't stay busy.
 - 🔨 Don't `rm -rf` a worktree. Use `wt rm`. If you already did, run `wt prune`.
 
-📚 Full docs, with diagrams and a version explained with animals: **[easy-worktree docs](https://claude.ai/artifact/M3FYmmG6kEp19Kh3N7NYcL)**
+📚 Full docs, with diagrams and a version explained with animals: **[jeslopcru.github.io/easy-worktree](https://jeslopcru.github.io/easy-worktree/)**
 
 ## 😄 Joke
 

@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="wt: one small zsh function to list, create, jump into and clean up your git worktrees.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌳</text></svg>">
+<title>easy-worktree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column that walks from a picture-book story down to a grown-up reference; diagrams break out wider */
+:root {
+  --bg: #EEF5EF;
+  --paper: #FFFFFF;
+  --fg: #1E2B23;
+  --muted: #56655B;
+  --leaf: #2F7D45;
+  --leaf-soft: #D5EBD9;
+  --bark: #7A5230;
+  --root: #A9744A;
+  --sun: #E9A92B;
+  --berry: #C0395A;
+  --sky: #DCEBF5;
+  --line: #C6D6CA;
+  --term-bg: #17211B;
+  --term-fg: #DDE8E0;
+  --term-yellow: #E8C35A;
+  --term-green: #7CCB8E;
+  --term-red: #F08080;
+  --display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111915; --paper: #18231D; --fg: #E4EEE7; --muted: #9DB0A3;
+    --leaf: #6CC283; --leaf-soft: #213A2A; --bark: #C99A6E; --root: #B98357;
+    --sun: #F0BE55; --berry: #EE7090; --sky: #1B2A33; --line: #2C3D33;
+    --term-bg: #0B110E; --term-fg: #DDE8E0; --term-yellow: #E8C35A; --term-green: #7CCB8E;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111915; --paper: #18231D; --fg: #E4EEE7; --muted: #9DB0A3;
+  --leaf: #6CC283; --leaf-soft: #213A2A; --bark: #C99A6E; --root: #B98357;
+  --sun: #F0BE55; --berry: #EE7090; --sky: #1B2A33; --line: #2C3D33;
+  --term-bg: #0B110E; --term-fg: #DDE8E0; --term-yellow: #E8C35A; --term-green: #7CCB8E;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { color-scheme: light dark; }
+body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 17px/1.6 var(--body); padding-inline: 16px; padding-block: 0 64px; }
+.wrap { max-width: 760px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.3rem, 7vw, 3.6rem); font-weight: 700; color: var(--leaf); }
+h2 { font-size: 1.75rem; font-weight: 600; }
+h3 { font-size: 1.15rem; font-weight: 600; }
+p { margin: 0; max-width: 65ch; }
+code, pre { font-family: var(--mono); font-size: 0.86em; }
+p code, li code, td code { background: var(--leaf-soft); padding: 1px 6px; border-radius: 5px; }
+.eyebrow { font: 600 0.78rem/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--bark); }
+section { display: grid; gap: 18px; padding-block: 44px 0; }
+header { display: grid; gap: 14px; padding-block: 48px 8px; }
+header p.lede { font-size: 1.2rem; color: var(--muted); }
+
+.figure { background: var(--sky); border-radius: 18px; padding: 12px; overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.caption { font-size: 0.9rem; color: var(--muted); }
+svg text { font-family: var(--body); fill: var(--fg); }
+svg .t-display { font-family: var(--display); font-weight: 600; }
+svg .t-mono { font-family: var(--mono); font-size: 12px; fill: var(--muted); }
+svg .ground { fill: var(--leaf-soft); }
+svg .trunk { fill: none; stroke: var(--bark); stroke-linecap: round; }
+svg .roots { fill: none; stroke: var(--root); stroke-width: 5; stroke-linecap: round; opacity: 0.8; }
+svg .house { fill: var(--paper); stroke: var(--bark); stroke-width: 2.5; }
+svg .roof { fill: var(--berry); }
+svg .roof.main { fill: var(--sun); }
+svg .acorn { fill: var(--bark); }
+svg .acorn-cap { fill: var(--root); }
+svg .label-bg { fill: var(--paper); opacity: 0.92; }
+svg .leaves { fill: var(--leaf); opacity: 0.18; }
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.rule { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.rule .who { font-size: 2rem; line-height: 1; }
+.rule .real { font-size: 0.85rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.box { border-radius: 14px; padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.box.shared { background: var(--leaf-soft); }
+.box.own { background: var(--paper); border: 2px dashed var(--berry); }
+.box ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; counter-reset: step; }
+.steps li { counter-increment: step; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.steps li::before { content: counter(step); font: 700 0.85rem/1 var(--display); color: var(--paper); background: var(--leaf); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; }
+.steps .emoji { font-size: 1.6rem; line-height: 1; }
+.steps code { font-size: 0.8rem; color: var(--leaf); overflow-wrap: anywhere; }
+
+.grownups { border-top: 3px solid var(--bark); margin-top: 56px; }
+.term { background: var(--term-bg); color: var(--term-fg); border-radius: 12px; padding: 16px; overflow-x: auto; font: 13px/1.7 var(--mono); white-space: pre; }
+.term .r { color: var(--term-red); } .term .y { color: var(--term-yellow); } .term .g { color: var(--term-green); } .term b { font-weight: 700; color: #fff; }
+.term .dim { opacity: 0.6; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.78rem/1.2 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+td code { white-space: nowrap; }
+kbd { font: 600 0.8em var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--paper); }
+details { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+summary { cursor: pointer; font-weight: 700; }
+summary:focus-visible, button:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+.src-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-block: 12px; }
+button { font: 600 0.9rem var(--body); background: var(--leaf); color: var(--paper); border: 0; border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+.status { font-size: 0.85rem; color: var(--muted); }
+.cmd { display: flex; gap: 10px; align-items: center; background: var(--term-bg); color: var(--term-fg); border-radius: 12px; padding: 10px 10px 10px 16px; min-width: 0; }
+.cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: pre; font-size: 13px; background: none; padding: 0; color: inherit; }
+.cmd button { flex: none; padding: 6px 12px; font-size: 0.8rem; }
+.install { display: grid; gap: 10px; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
+.links a { font-weight: 700; color: var(--leaf); text-decoration: none; border: 2px solid var(--leaf); border-radius: 999px; padding: 6px 14px; }
+.links a:hover, .links a:focus-visible { background: var(--leaf-soft); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.9rem; color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); display: grid; gap: 8px; color: var(--muted); font-size: 0.95rem; }
+footer a { color: var(--leaf); }
+pre.src { margin: 0; background: var(--term-bg); color: var(--term-fg); border-radius: 10px; padding: 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; max-height: 420px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="eyebrow">zsh · git worktrees · docs</span>
+  <h1>easy-worktree</h1>
+  <p class="lede"><code>wt</code> is one small zsh function to list, create, jump into and clean up your git worktrees. Further down, the Worktree Forest explains worktrees with animals.</p>
+  <div class="links">
+    <a href="https://github.com/jeslopcru/easy-worktree">GitHub repo</a>
+    <a href="#reference">Commands</a>
+    <a href="#forest">How worktrees work</a>
+  </div>
+</header>
+
+<section id="install">
+  <h2>Install</h2>
+  <p>Needs <strong>zsh</strong> and <strong>git</strong>. Docker is optional. Run these two lines, then open a new terminal and type <code>wt</code>.</p>
+  <div class="install">
+    <div class="cmd"><code>git clone https://github.com/jeslopcru/easy-worktree.git ~/.easy-worktree</code><button type="button" data-copy>Copy</button></div>
+    <div class="cmd"><code>echo '[ -f ~/.easy-worktree/wt.zsh ] &amp;&amp; source ~/.easy-worktree/wt.zsh' &gt;&gt; ~/.zshrc</code><button type="button" data-copy>Copy</button></div>
+  </div>
+  <p>To update later:</p>
+  <div class="cmd"><code>git -C ~/.easy-worktree pull</code><button type="button" data-copy>Copy</button></div>
+  <span class="status" id="copy-cmd-status" aria-live="polite"></span>
+</section>
+
+<section id="forest">
+  <span class="eyebrow">How worktrees work, explained with animals</span>
+  <h2>Once upon a tree</h2>
+  <p>Your project is a big tree in a forest. Deep underground, the tree has <strong>memory roots</strong>. Every time an animal finishes a piece of work, it buries an <strong>acorn</strong> in the roots, so the tree remembers it forever.</p>
+  <p>The tree has branches, and on each branch there can be a little <strong>house</strong>. One animal lives in each house and works on one job. Owl lives in the big house on top and looks after the main story. Fox is fixing a leak, Rabbit is painting a new room, and Squirrel is checking the acorns.</p>
+  <p>Every house is its own place with its own mess on the table. But they all hang off the <em>same</em> tree and share the <em>same</em> roots. That is a worktree: one more house on the same tree.</p>
+
+  <div class="figure" role="img" aria-label="A tree with four houses on its branches, each with an animal and a branch name, all connected to one shared set of roots holding acorns.">
+    <svg viewBox="0 0 720 470" xmlns="http://www.w3.org/2000/svg">
+      <ellipse class="leaves" cx="360" cy="150" rx="330" ry="130"/>
+      <rect class="ground" x="0" y="300" width="720" height="170"/>
+      <path class="trunk" stroke-width="30" d="M360 305 L360 110"/>
+      <path class="trunk" stroke-width="12" d="M360 215 C300 200 240 180 175 150"/>
+      <path class="trunk" stroke-width="12" d="M360 190 C430 170 500 145 560 125"/>
+      <path class="trunk" stroke-width="10" d="M360 265 C440 260 520 255 590 245"/>
+
+      <path class="roots" d="M360 305 C340 350 280 380 190 400"/>
+      <path class="roots" d="M360 305 C365 360 360 400 360 430"/>
+      <path class="roots" d="M360 305 C390 350 450 380 540 400"/>
+      <path class="roots" d="M300 360 C260 370 230 395 210 430"/>
+      <path class="roots" d="M420 360 C470 375 500 400 510 432"/>
+      <g>
+        <ellipse class="acorn" cx="250" cy="392" rx="9" ry="11"/><path class="acorn-cap" d="M240 386 a10 7 0 0 1 20 0 z"/>
+        <ellipse class="acorn" cx="330" cy="418" rx="9" ry="11"/><path class="acorn-cap" d="M320 412 a10 7 0 0 1 20 0 z"/>
+        <ellipse class="acorn" cx="400" cy="400" rx="9" ry="11"/><path class="acorn-cap" d="M390 394 a10 7 0 0 1 20 0 z"/>
+        <ellipse class="acorn" cx="470" cy="388" rx="9" ry="11"/><path class="acorn-cap" d="M460 382 a10 7 0 0 1 20 0 z"/>
+      </g>
+      <rect class="label-bg" x="206" y="440" width="308" height="26" rx="8"/>
+      <text x="360" y="458" text-anchor="middle" font-size="14"><tspan class="t-display">Memory roots</tspan> (.git) · shared by every house</text>
+
+      <!-- Owl: main -->
+      <g>
+        <path class="roof main" d="M316 62 L360 26 L404 62 Z"/>
+        <rect class="house" x="324" y="62" width="72" height="54" rx="6"/>
+        <text x="360" y="100" text-anchor="middle" font-size="30">🦉</text>
+      </g>
+      <text x="420" y="60" class="t-display" font-size="15">Owl's big house</text>
+      <text x="420" y="78" class="t-mono">main · main checkout</text>
+
+      <!-- Fox -->
+      <g>
+        <path class="roof" d="M132 106 L170 76 L208 106 Z"/>
+        <rect class="house" x="140" y="106" width="60" height="46" rx="6"/>
+        <text x="170" y="140" text-anchor="middle" font-size="26">🦊</text>
+      </g>
+      <text x="170" y="175" text-anchor="middle" class="t-display" font-size="15">Fox</text>
+      <text x="170" y="192" text-anchor="middle" class="t-mono">fix/flaky-tests</text>
+
+      <!-- Rabbit -->
+      <g>
+        <path class="roof" d="M522 82 L560 52 L598 82 Z"/>
+        <rect class="house" x="530" y="82" width="60" height="46" rx="6"/>
+        <text x="560" y="116" text-anchor="middle" font-size="26">🐰</text>
+      </g>
+      <text x="630" y="96" class="t-display" font-size="15">Rabbit</text>
+      <text x="630" y="113" class="t-mono">feat/login-page</text>
+
+      <!-- Squirrel -->
+      <g>
+        <path class="roof" d="M552 202 L590 172 L628 202 Z"/>
+        <rect class="house" x="560" y="202" width="60" height="46" rx="6"/>
+        <text x="590" y="236" text-anchor="middle" font-size="26">🐿️</text>
+      </g>
+      <text x="590" y="272" text-anchor="middle" class="t-display" font-size="15">Squirrel</text>
+      <text x="590" y="289" text-anchor="middle" class="t-mono">docs/readme</text>
+    </svg>
+  </div>
+  <p class="caption">Each house is a folder on your computer. Each branch of the tree is a git branch. The roots are the <code>.git</code> folder, and there is only one.</p>
+</section>
+
+<section>
+  <h2>What is shared, and what is yours</h2>
+  <div class="split">
+    <div class="box shared">
+      <h3>🌳 In the roots: everyone sees it</h3>
+      <ul>
+        <li><strong>Acorns</strong>, the finished work (commits). When Fox buries one, Owl can see it straight away.</li>
+        <li><strong>The list of branches.</strong></li>
+        <li><strong>The secret hiding hole</strong> (the stash). Anyone can take what's in it.</li>
+        <li><strong>The map to other forests</strong> (remotes like GitLab).</li>
+      </ul>
+    </div>
+    <div class="box own">
+      <h3>🏠 In each house: only yours</h3>
+      <ul>
+        <li><strong>The mess on your table</strong>, the files you're changing right now.</li>
+        <li><strong>Which branch you live on.</strong></li>
+        <li><strong>Your backpack</strong> (<code>.env</code> files). It doesn't come with a new house by itself.</li>
+        <li><strong>Your toys</strong> (Docker containers). Every house gets its own set.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Forest rules</h2>
+  <div class="rules">
+    <div class="rule">
+      <span class="who">🦊</span>
+      <h3>One house per branch</h3>
+      <p>Two animals can't live on the same branch. If Fox is on it, Rabbit has to pick another one.</p>
+      <p class="real">Git says <code>already checked out</code>.</p>
+    </div>
+    <div class="rule">
+      <span class="who">🐿️</span>
+      <h3>Don't use the hiding hole</h3>
+      <p>The stash is shared by the whole forest. Someone else might grab your things. Bury an acorn marked "not finished" instead.</p>
+      <p class="real">Make a WIP commit instead of <code>git stash</code>.</p>
+    </div>
+    <div class="rule">
+      <span class="who">🎒</span>
+      <h3>Bring your backpack</h3>
+      <p>A new house starts with an empty hook where the backpack goes. <code>wt new</code> hangs a sign on it pointing to Owl's backpack.</p>
+      <p class="real">Ignored files are not copied, so <code>.env</code> files get symlinked.</p>
+    </div>
+    <div class="rule">
+      <span class="who">🧸</span>
+      <h3>Put the toys away</h3>
+      <p>If you move out and leave your toys on the path, the other animals trip over them.</p>
+      <p class="real">Leftover containers keep ports like 5671 busy. <code>wt rm</code> stops them first.</p>
+    </div>
+    <div class="rule">
+      <span class="who">🔨</span>
+      <h3>No hammers</h3>
+      <p>Don't knock a house down yourself. Ask the forest ranger, so the tree knows the house is gone.</p>
+      <p class="real">Use <code>wt rm</code>, not <code>rm -rf</code>. If you already did, run <code>wt prune</code>.</p>
+    </div>
+    <div class="rule">
+      <span class="who">🌿</span>
+      <h3>Moving out keeps the branch</h3>
+      <p>When an animal leaves, its branch stays on the tree until someone trims it.</p>
+      <p class="real">Delete it with <code>git branch -D &lt;name&gt;</code> once it's merged.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>A day in the forest</h2>
+  <p>This is how Rabbit gets a new job done, from building the house to cleaning up.</p>
+  <ol class="steps">
+    <li><span class="emoji">🏗️</span><h3>Build a house</h3><code>wt new feat/login-page origin/main</code></li>
+    <li><span class="emoji">🐰</span><h3>Move in</h3><code>wt cd login</code></li>
+    <li><span class="emoji">🌰</span><h3>Work and bury acorns</h3><code>git commit</code></li>
+    <li><span class="emoji">📮</span><h3>Send acorns to the big forest</h3><code>git push</code></li>
+    <li><span class="emoji">📦</span><h3>Move out, toys packed</h3><code>wt rm login</code></li>
+    <li><span class="emoji">✂️</span><h3>Trim the branch</h3><code>git branch -D feat/login-page</code></li>
+  </ol>
+</section>
+
+<section class="grownups" id="reference">
+  <span class="eyebrow">Reference</span>
+  <h2>Commands</h2>
+  <p>A small zsh function that wraps <code>git worktree</code>. It shows every worktree of the repo you're in. The one you're in is bold with a <code>*</code>, worktrees with uncommitted changes are yellow, clean ones are green, and red means the folder was deleted by hand. Press <kbd>Tab</kbd> after <code>wt</code> to complete commands, worktree names and branch names.</p>
+  <div class="term" aria-label="Example output of the wt command"><span class="dim">$ wt</span>
+   0  <span class="y">  1 changed  main                </span> ~/code/my-app
+<b>*  1  <span class="g">  0 changed  feat/login-page     </span> ~/code/my-app/.claude/worktrees/feat-login-page</b>
+   2  <span class="y">  3 changed  fix/flaky-tests     </span> ~/code/my-app/.claude/worktrees/fix-flaky-tests
+   3  <span class="r">folder gone                      </span> ~/code/my-app/.claude/worktrees/old-spike  (stale — wt prune)</div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--term-yellow)"></span>uncommitted changes</span>
+    <span><span class="dot" style="background:var(--term-green)"></span>clean</span>
+    <span><span class="dot" style="background:var(--term-red)"></span>folder deleted by hand</span>
+    <span><strong>bold *</strong> you are here</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>wt</code></td><td>List worktrees with their number, changed-file count, branch and path.</td></tr>
+        <tr><td><code>wt new &lt;branch&gt; [base]</code></td><td>Create a worktree in <code>$WT_DIR</code> and move into it. Checks out the branch if it already exists, or creates it from <code>base</code> (default: current HEAD). Symlinks the main checkout's <code>.env</code> files.</td></tr>
+        <tr><td><code>wt cd &lt;n|name&gt;</code></td><td>Move your terminal into a worktree. Use the number from the list, or any part of the path.</td></tr>
+        <tr><td><code>wt rm &lt;n|name&gt; [-f]</code></td><td>Stop the worktree's Docker Compose project (<code>down -v</code>), then remove it. Refuses if there are uncommitted changes unless you pass <code>-f</code>. Never removes the main checkout. Keeps the branch.</td></tr>
+        <tr><td><code>wt prune</code></td><td>Forget worktrees whose folder was deleted by hand (shown in red as <em>folder gone</em> in the list). Stops their Docker Compose first. Never touches folders that exist, branches or commits.</td></tr>
+        <tr><td><code>wt help</code></td><td>Usage, how to read the list, and examples.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Tab completion</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>You type</th><th>Tab suggests</th></tr></thead>
+      <tbody>
+        <tr><td><code>wt &lt;Tab&gt;</code></td><td>The commands, each with a short description</td></tr>
+        <tr><td><code>wt cd &lt;Tab&gt;</code></td><td>Worktree folder names, with the branch each one is on</td></tr>
+        <tr><td><code>wt rm &lt;Tab&gt;</code></td><td>The same list without the main checkout, then <code>-f</code></td></tr>
+        <tr><td><code>wt new &lt;Tab&gt;</code></td><td>Your local branches</td></tr>
+        <tr><td><code>wt new feat/x &lt;Tab&gt;</code></td><td>Local and remote branches to start from</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Config</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>WT_DIR</code></td><td><code>.claude/worktrees</code></td><td>Where <code>wt new</code> puts worktrees, relative to the main checkout. Set it in <code>~/.zshrc</code>, e.g. <code>export WT_DIR=.worktrees</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Plain git equivalents</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Task</th><th>Git command</th></tr></thead>
+      <tbody>
+        <tr><td>List</td><td><code>git worktree list</code></td></tr>
+        <tr><td>Create on a new branch</td><td><code>git worktree add -b feat/x ../x origin/main</code></td></tr>
+        <tr><td>Remove</td><td><code>git worktree remove ../x</code></td></tr>
+        <tr><td>Clean entries for folders deleted by hand</td><td><code>git worktree prune</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <details id="source">
+    <summary>View the source of <code>wt.zsh</code></summary>
+    <p style="margin-top:10px">The whole tool is this one file. Read it before you source it, the way you would any script from the internet.</p>
+    <div class="src-tools">
+      <button type="button" id="copy-src">Copy script</button>
+      <span class="status" id="copy-status" aria-live="polite"></span>
+    </div>
+    <pre class="src" id="src-view"></pre>
+  </details>
+</section>
+
+<footer>
+  <p><strong>Why did the developer start using worktrees?</strong> Because every time they ran <code>git stash</code>, their work went into hiding, and it never came back.</p>
+  <p>Made by <a href="https://github.com/jeslopcru">@jeslopcru</a> · <a href="https://github.com/jeslopcru/easy-worktree">github.com/jeslopcru/easy-worktree</a></p>
+</footer>
+</div>
+
+<script type="text/plain" id="wt-src">
+_wt_paths() { git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print}'; }
+
+_wt_resolve() {
+  local match
+  if [[ $1 == <-> ]]; then
+    match=$(_wt_paths | sed -n "$(( $1 + 1 ))p")
+  else
+    match=$(_wt_paths | command grep -- "/$1$")
+    [[ -n $match ]] || match=$(_wt_paths | command grep -- "$1")
+    [[ $(print -l -- $match | wc -l) -gt 1 ]] && { echo "ambiguous: '$1' matches several worktrees, use its number:" >&2; print -l -- $match >&2; return 1; }
+  fi
+  [[ -n $match ]] || { echo "no worktree matches '$1' — run 'wt' to see the list" >&2; return 1; }
+  print -- $match
+}
+
+_wt_help() {
+  cat <<'EOF'
+wt — see, switch and remove git worktrees
+
+USAGE
+  wt                   list all worktrees of this repo
+  wt new <branch> [base]
+                       create a worktree and jump into it
+                       (existing branch → checks it out; new branch → created from
+                       [base], default: current HEAD; .env files are symlinked in)
+                       lives in $WT_DIR (default: .claude/worktrees)
+  wt cd <n|name>       jump the terminal into a worktree
+  wt rm <n|name> [-f]  remove a worktree (stops its docker compose first)
+  wt prune             forget worktrees whose folder was deleted by hand
+                       (stops their docker compose; never touches existing
+                       folders, branches or commits)
+  wt help              show this help
+
+<n|name>  the number shown by 'wt', or any part of the worktree path
+          (e.g. 'wt cd login' → .../feat-login-page)
+          press TAB to complete commands, worktree names and branches
+
+READING THE LIST
+  *  bold line     the worktree you are in right now
+  yellow           has uncommitted changes (the number = changed files)
+  green            clean
+  red "folder gone" the folder was deleted by hand — run 'wt prune'
+  0                always the main checkout (cannot be removed)
+
+REMOVING
+  - refuses if the worktree has uncommitted changes; add -f to discard them
+  - runs 'docker compose -p <folder> down -v' first, so its containers and
+    volumes don't keep ports busy
+  - the branch is kept; delete it yourself with: git branch -D <branch>
+
+EXAMPLES
+  wt                   what do I have?
+  wt new feat/login-page origin/main
+                       start a new task from the latest main
+  wt cd 3              work in worktree 3
+  wt cd 0              back to the main checkout
+  wt rm login          clean up a finished worktree
+EOF
+}
+
+_wt_list() {
+  local i=0 d n mark bold color current reset=$'\e[0m'
+  current=$(git rev-parse --show-toplevel)
+  _wt_paths | while read -r d; do
+    [[ ${d:A} == ${current:A} ]] && { mark='*'; bold=$'\e[1m'; } || { mark=' '; bold=''; }
+    if [[ ! -d $d ]]; then
+      printf '%s %2d  \e[31m%-62s%s %s  (stale — wt prune)\n' "$mark" $i "folder gone" "$reset" "${d/#$HOME/~}"
+      (( i++ )); continue
+    fi
+    n=$(git -C "$d" status -s 2>/dev/null | wc -l | tr -d ' ')
+    (( n > 0 )) && color=$'\e[33m' || color=$'\e[32m'
+    printf '%s%s %2d  %s%3s changed  %-50s%s%s %s%s\n' "$bold" "$mark" $i "$color" $n \
+      "$(git -C "$d" branch --show-current 2>/dev/null)" "$reset" "$bold" "${d/#$HOME/~}" "$reset"
+    (( i++ ))
+  done
+}
+
+_wt_new() {
+  local branch=$1 base=${2:-HEAD} main dir f
+  main=$(_wt_paths | head -1)
+  dir="$main/${WT_DIR:-.claude/worktrees}/${branch//\//-}"
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git worktree add "$dir" "$branch" || return 1
+  else
+    git worktree add -b "$branch" "$dir" "$base" || return 1
+  fi
+  for f in "$main"/.env*(N) "$main"/*/.env*(N); do
+    [[ -f $f && ! -e $dir/${f#$main/} ]] && ln -s "$f" "$dir/${f#$main/}"
+  done
+  cd "$dir" && echo "created $dir — you are now in it"
+}
+
+_wt_prune() {
+  local d stale=()
+  for d in ${(f)"$(_wt_paths)"}; do [[ -d $d ]] || stale+=$d; done
+  (( ${#stale} )) || { echo "nothing to prune — every worktree folder exists"; return; }
+  for d in $stale; do
+    echo "pruning ${d/#$HOME/~}"
+    docker compose -p "${${d:t}:l}" down -v 2>/dev/null
+  done
+  git worktree prune && echo "done — branches kept"
+}
+
+_wt_rm() {
+  local target force=()
+  [[ $2 == -f ]] && force=(--force)
+  target=$(_wt_resolve "$1") || return 1
+  [[ $target == $(_wt_paths | head -1) ]] && { echo "refusing to remove the main worktree" >&2; return 1; }
+  [[ $PWD == $target* ]] && cd "$(_wt_paths | head -1)"
+  docker compose -p "${${target:t}:l}" down -v 2>/dev/null
+  git worktree remove $force "$target" && echo "removed $target (branch kept)"
+}
+
+wt() {
+  case $1 in
+    help|-h|--help) _wt_help; return ;;
+  esac
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo "not in a git repo — cd into one first (wt help)" >&2; return 1; }
+  case $1 in
+    ""|ls) _wt_list ;;
+    cd)    [[ -n $2 ]] || { echo "which one? wt cd <n|name>" >&2; return 1; }
+           local target; target=$(_wt_resolve "$2") && cd "$target" ;;
+    new)   [[ -n $2 ]] || { echo "which branch? wt new <branch> [base]" >&2; return 1; }
+           _wt_new "$2" "$3" ;;
+    prune) _wt_prune ;;
+    rm)    [[ -n $2 ]] || { echo "which one? wt rm <n|name> [-f]" >&2; return 1; }
+           _wt_rm "$2" "$3" ;;
+    *)     echo "unknown command '$1'" >&2; _wt_help >&2; return 1 ;;
+  esac
+}
+
+_wt_complete() {
+  local -a cmds names
+  cmds=(
+    'ls:list all worktrees'
+    'new:create a worktree and jump into it'
+    'cd:jump into a worktree'
+    'rm:remove a worktree'
+    'prune:forget worktrees whose folder was deleted'
+    'help:show help'
+  )
+  if (( CURRENT == 2 )); then
+    _describe 'wt command' cmds
+    return
+  fi
+  local d i=0
+  for d in ${(f)"$(_wt_paths 2>/dev/null)"}; do
+    [[ $words[2] == rm && $i == 0 ]] || names+=("${d:t}:$(git -C "$d" branch --show-current 2>/dev/null)")
+    (( i++ ))
+  done
+  case $words[2] in
+    cd|rm) (( CURRENT == 3 )) && _describe 'worktree' names
+           [[ $words[2] == rm && CURRENT -eq 4 ]] && compadd -- -f ;;
+    new)   (( CURRENT == 3 )) && compadd -- ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"}
+           (( CURRENT == 4 )) && compadd -- ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null)"} ;;
+  esac
+}
+(( $+functions[compdef] )) && compdef _wt_complete wt
+</script>
+<script>
+(function () {
+  var src = document.getElementById('wt-src').textContent.replace(/^\n/, '');
+  var view = document.getElementById('src-view');
+  view.textContent = src;
+  fetch('https://raw.githubusercontent.com/jeslopcru/easy-worktree/main/wt.zsh')
+    .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+    .then(function (t) { src = t; view.textContent = t; }, function () {});
+  var status = document.getElementById('copy-status');
+  document.getElementById('copy-src').addEventListener('click', function () {
+    var done = function () { status.textContent = 'Copied to clipboard'; };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents(view);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      status.textContent = 'Selected. Press Cmd+C to copy';
+    };
+    try { navigator.clipboard.writeText(src).then(done, fallback); } catch (e) { fallback(); }
+  });
+  var cmdStatus = document.getElementById('copy-cmd-status');
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var code = btn.previousElementSibling;
+      var ok = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); };
+      var fallback = function () {
+        var r = document.createRange(); r.selectNodeContents(code);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        cmdStatus.textContent = 'Selected. Press Cmd+C to copy';
+      };
+      try { navigator.clipboard.writeText(code.textContent).then(ok, fallback); } catch (e) { fallback(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
