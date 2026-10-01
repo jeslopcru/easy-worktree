@@ -4,13 +4,15 @@
 
 ```
 $ wt
-   #  clean  changes      MR/PR        branch            folder            why
-*  0  main     1 changed  -            main              my-app
-   1  safe     0 changed  !42 merged   feat/login-page   feat-login-page
-   2  check    0 changed  !43 closed   fix/flaky-tests   fix-flaky-tests   3 commits not in origin/main, MR closed
-   3  keep     0 changed  !44 opened   feat/dark-mode    feat-dark-mode    MR still open
-   4  keep     2 changed  -            spike/parser      spike-parser      2 uncommitted files
-   5  gone                -            old/spike         old-spike         folder deleted by hand — run wt prune
+   #  clean  changes      MR/PR        merged      branch            folder            why
+*  0  main     1 changed  -            -           main              my-app
+   1  safe     0 changed  !42 merged   yes         feat/login-page   feat-login-page
+   2  safe     0 changed  -            no commits  docs/typo         docs-typo
+   3  check    0 changed  !43 closed   no          fix/flaky-tests   fix-flaky-tests   3 commits not in origin/main, MR closed
+   4  check    0 changed  !45 merged   squash?     feat/search       feat-search       MR merged, but 4 commits differ from origin/main (squash?)
+   5  keep     0 changed  !44 opened   no          feat/dark-mode    feat-dark-mode    MR still open
+   6  keep     2 changed  -            no          spike/parser      spike-parser      2 uncommitted files
+   7  gone                -            -           old/spike         old-spike         folder deleted by hand — run wt prune
 ```
 
 One table, everything you need: 🟢 **safe** to remove · 🟡 **check** first (commits not in the default branch) · 🔴 **keep** (uncommitted files or open MR/PR) · 🟣 **gone** (run `wt prune`) · `*` = you are here
@@ -44,6 +46,15 @@ Press **Tab** after `wt` to complete commands, worktree names and branches. ⌨�
 - 🟢 **safe**: nothing uncommitted, and every commit is already in origin's default branch (matched by content, so work that landed through another branch counts). `wt rm` it.
 - 🟡 **check**: some commits aren't in the default branch. Look before removing. A squash-merged MR lands here too, because squashing rewrites the commits.
 - 🔴 **keep**: uncommitted files, or the MR/PR is still open.
+
+The **merged** column answers *is this branch's work in the default branch?*, even without an MR:
+
+| merged | Meaning |
+|---|---|
+| ✅ `yes` | Every commit is in the default branch |
+| ❌ `no` | Some commits aren't there (yet) |
+| 🤔 `squash?` | The MR was merged, but the commits differ, probably a squash merge |
+| 💤 `no commits` | The branch never got a commit of its own |
 
 MR/PR comes from `glab` + `jq` (GitLab) or `gh` (GitHub). Without them the column shows `-` and the rest still works.
 

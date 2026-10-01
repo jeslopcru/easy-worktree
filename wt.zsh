@@ -47,6 +47,10 @@ READING THE LIST
            gone   folder was deleted by hand → wt prune
   changes  uncommitted files (yellow) or clean (green)
   MR/PR    read with glab + jq (GitLab) or gh (GitHub); '-' if none or not installed
+  merged   yes         every commit is in the default branch
+           no          some commits are not (yet) in the default branch
+           squash?     MR merged but commits differ (squash merge?)
+           no commits  branch has no commits of its own (never started)
   why      the reason, when it is not safe
 
 REMOVING
@@ -111,6 +115,14 @@ _wt_mr() {
   fi
 }
 
+_wt_merged() {
+  local ahead=$1 unique=$2 mr=$3
+  (( ahead == 0 ))       && { print "no commits"; return; }
+  (( unique == 0 ))      && { print "yes"; return; }
+  [[ $mr == *\ merged ]] && { print "squash?"; return; }
+  print "no"
+}
+
 _wt_verdict() {
   local dirty=$1 unique=$2 mr=$3 base=$4
   (( dirty > 0 ))           && { print "keep|$dirty uncommitted files"; return; }
@@ -136,8 +148,9 @@ _wt_lookups() {
 
 _wt_list() {
   local -a rows branches; rows=(${(f)"$(_wt_rows)"})
+  local -A mcolors=(yes $'\e[32m' no $'\e[33m' 'squash?' $'\e[33m' 'no commits' $'\e[2m')
   local -A mrs colors=(safe $'\e[32m' check $'\e[33m' keep $'\e[31m' main $'\e[2m' gone $'\e[35m')
-  local line d b base main current i=0 n unique v reason mark wb=6 wf=6 reset=$'\e[0m' dim=$'\e[2m'
+  local line d b base main current i=0 n unique ahead merged v reason mark wb=6 wf=6 reset=$'\e[0m' dim=$'\e[2m'
   for line in $rows; do
     b=${line#*$'\t'}; d=${line%%$'\t'*}
     [[ -n $b ]] && branches+=$b
@@ -147,25 +160,27 @@ _wt_list() {
   main=${rows[1]%%$'\t'*}
   base=$(_wt_base) || base=$(git -C "$main" branch --show-current)
   current=$(git rev-parse --show-toplevel)
-  printf "$dim  %2s  %-5s  %-11s  %-11s  %-${wb}s  %-${wf}s  %s$reset\n" '#' 'clean' 'changes' 'MR/PR' 'branch' 'folder' 'why'
+  printf "$dim  %2s  %-5s  %-11s  %-11s  %-10s  %-${wb}s  %-${wf}s  %s$reset\n" '#' 'clean' 'changes' 'MR/PR' 'merged' 'branch' 'folder' 'why'
   for line in $rows; do
     d=${line%%$'\t'*}; b=${line#*$'\t'}
     mark=' '; [[ ${d:A} == ${current:A} ]] && mark='*'
     if [[ ! -d $d ]]; then
-      v=gone; n=; reason="folder deleted by hand — run wt prune"
+      v=gone; n=; merged=; reason="folder deleted by hand — run wt prune"
     else
       n=$(git -C "$d" status -s 2>/dev/null | wc -l | tr -d ' ')
       if [[ $d == $main ]]; then
-        v=main; reason=
+        v=main; merged=; reason=
       else
         unique=$(git cherry "$base" "${b:-$(git -C "$d" rev-parse HEAD)}" 2>/dev/null | command grep -c '^+')
+        ahead=$(git rev-list --count "$base..${b:-$(git -C "$d" rev-parse HEAD)}" 2>/dev/null)
+        merged=$(_wt_merged ${ahead:-0} $unique "${mrs[$b]}")
         IFS='|' read -r v reason <<< "$(_wt_verdict $n $unique "${mrs[$b]}" $base)"
       fi
     fi
     [[ $v == safe ]] && reason=
-    printf "\e[1m%s$reset %2d  %s%-5s$reset  %s%11s$reset  %-11s  \e[1m%-${wb}s$reset  $dim%-${wf}s$reset  %s%s$reset\n" \
+    printf "\e[1m%s$reset %2d  %s%-5s$reset  %s%11s$reset  %-11s  %s%-10s$reset  \e[1m%-${wb}s$reset  $dim%-${wf}s$reset  %s%s$reset\n" \
       "$mark" $i "${colors[$v]}" $v "$( [[ $n == 0 ]] && print $'\e[32m' || print $'\e[33m' )" "${n/#%-/}${n:+ changed}" \
-      "${mrs[$b]:--}" "${b:-(detached)}" "${d:t}" "${colors[$v]}" "$reason"
+      "${mrs[$b]:--}" "${mcolors[$merged]}" "${merged:--}" "${b:-(detached)}" "${d:t}" "${colors[$v]}" "$reason"
     (( i++ ))
   done
 }
